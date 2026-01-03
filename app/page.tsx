@@ -1,4 +1,89 @@
+"use client";
+
+import { useState } from "react";
+
+interface Illustration {
+  id: string;
+  url: string;
+  prompt: string;
+}
+
+type ModelType = "recraft-ai/recraft-20b-svg" | "recraft-ai/recraft-v3-svg";
+
+const modelStyles = {
+  "recraft-ai/recraft-v3-svg": [
+    { value: "any", label: "Any" },
+    { value: "engraving", label: "Engraving" },
+    { value: "line_art", label: "Line Art" },
+    { value: "line_circuit", label: "Line Circuit" },
+    { value: "linocut", label: "Linocut" },
+  ],
+  "recraft-ai/recraft-20b-svg": [
+    { value: "vector_illustration", label: "Vector Illustration" },
+    { value: "icon/doodle_fill", label: "Icon Doodle Fill" },
+  ],
+};
+
 export default function Home() {
+  const [prompt, setPrompt] = useState("");
+  const [illustrations, setIllustrations] = useState<Illustration[]>([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<ModelType>("recraft-ai/recraft-20b-svg");
+  const [style, setStyle] = useState("vector_illustration");
+
+  const handleModelChange = (model: ModelType) => {
+    setSelectedModel(model);
+    // Set default style based on model
+    if (model === "recraft-ai/recraft-20b-svg") {
+      setStyle("vector_illustration");
+    } else if (model === "recraft-ai/recraft-v3-svg") {
+      setStyle("any");
+    }
+  };
+
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!prompt.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          model: selectedModel,
+          style,
+          size: "1024x1024",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate illustration");
+      }
+
+      const data = await response.json();
+
+      const newIllustration: Illustration = {
+        id: Date.now().toString(),
+        url: data.url,
+        prompt,
+      };
+
+      setIllustrations([newIllustration, ...illustrations]);
+      setPrompt("");
+    } catch (error) {
+      console.error("Error:", error);
+      alert("Failed to generate illustration. Please try again.");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Sidebar */}
@@ -54,47 +139,81 @@ export default function Home() {
         <h2 className="text-4xl font-bold mb-8">Type your illustration description</h2>
 
         {/* Input Area */}
-        <div className="w-full max-w-4xl mb-16">
-          <div className="relative">
+        <form onSubmit={handleGenerate} className="w-full max-w-4xl mb-16">
+          <div className="relative bg-white border border-gray-300 rounded-2xl px-6 pt-6 pb-4">
             <input
               type="text"
               placeholder="Ask to build something..."
-              className="w-full px-6 py-6 pr-16 bg-white border border-gray-300 rounded-2xl text-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              disabled={isGenerating}
+              className="w-full text-base bg-transparent focus:outline-none disabled:opacity-50 mb-3"
             />
-            <button className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-              </svg>
-            </button>
+
+            <div className="flex items-center justify-end gap-3">
+              <select
+                value={selectedModel}
+                onChange={(e) => handleModelChange(e.target.value as ModelType)}
+                className="px-3 py-2 bg-transparent border-none text-sm focus:outline-none cursor-pointer appearance-none pr-6"
+                style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='currentColor'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right center', backgroundSize: '20px' }}
+              >
+                <option value="recraft-ai/recraft-20b-svg">Recraft 20b(fast)</option>
+                <option value="recraft-ai/recraft-v3-svg">Recraft V3 (Quality)</option>
+              </select>
+
+              <button
+                type="submit"
+                disabled={isGenerating || !prompt.trim()}
+                className="w-10 h-10 bg-black rounded-lg flex items-center justify-center hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+              >
+                {isGenerating ? (
+                  <svg className="w-5 h-5 text-white animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
-        </div>
+        </form>
 
         {/* Recent Creations */}
         <div className="w-full max-w-6xl">
           <h3 className="text-2xl font-semibold mb-6">Recent creations</h3>
 
-          <div className="grid grid-cols-3 gap-6">
-            {/* Card 1 - Christmas Cat */}
-            <div className="aspect-square bg-green-700 rounded-2xl overflow-hidden">
-              <div className="w-full h-full flex items-center justify-center text-white text-sm">
-                Christmas illustration
+          {illustrations.length === 0 ? (
+            <div className="grid grid-cols-3 gap-6">
+              {/* Placeholder Cards */}
+              <div className="aspect-square bg-green-700 rounded-2xl overflow-hidden flex items-center justify-center">
+                <p className="text-white text-sm">Example illustration</p>
+              </div>
+              <div className="aspect-square bg-indigo-700 rounded-2xl overflow-hidden flex items-center justify-center">
+                <p className="text-white text-sm">Example illustration</p>
+              </div>
+              <div className="aspect-square bg-yellow-400 rounded-2xl overflow-hidden flex items-center justify-center">
+                <p className="text-black text-sm">Example illustration</p>
               </div>
             </div>
-
-            {/* Card 2 - Space Cat */}
-            <div className="aspect-square bg-indigo-700 rounded-2xl overflow-hidden">
-              <div className="w-full h-full flex items-center justify-center text-white text-sm">
-                Space cat illustration
-              </div>
+          ) : (
+            <div className="grid grid-cols-3 gap-6">
+              {illustrations.map((illustration) => (
+                <div
+                  key={illustration.id}
+                  className="aspect-square bg-white rounded-2xl overflow-hidden border border-gray-200 flex items-center justify-center p-4"
+                >
+                  <img
+                    src={illustration.url}
+                    alt={illustration.prompt}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+              ))}
             </div>
-
-            {/* Card 3 - Houses */}
-            <div className="aspect-square bg-yellow-400 rounded-2xl overflow-hidden">
-              <div className="w-full h-full flex items-center justify-center text-black text-sm">
-                Houses illustration
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </main>
     </div>

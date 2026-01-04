@@ -7,6 +7,9 @@ interface Illustration {
   id: string;
   url: string;
   prompt: string;
+  model?: string;
+  credits?: number;
+  createdAt?: string;
 }
 
 type ModelType = "recraft-ai/recraft-20b-svg" | "recraft-ai/recraft-v3-svg";
@@ -35,6 +38,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [illustrations, setIllustrations] = useState<Illustration[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingIllustrations, setIsLoadingIllustrations] = useState(true);
   const [selectedModel, setSelectedModel] = useState<ModelType>("recraft-ai/recraft-20b-svg");
   const [style, setStyle] = useState("vector_illustration");
   const [credits, setCredits] = useState(session?.user?.credits || 0);
@@ -44,6 +48,32 @@ export default function Home() {
       setCredits(session.user.credits);
     }
   }, [session]);
+
+  useEffect(() => {
+    const loadRecentIllustrations = async () => {
+      try {
+        const response = await fetch("/api/generations?limit=6");
+        if (response.ok) {
+          const data = await response.json();
+          const mappedIllustrations = data.items.map((item: any) => ({
+            id: item.id,
+            url: item.imageUrl,
+            prompt: item.prompt,
+            model: item.model,
+            credits: item.credits,
+            createdAt: item.createdAt,
+          }));
+          setIllustrations(mappedIllustrations);
+        }
+      } catch (error) {
+        console.error("Error loading illustrations:", error);
+      } finally {
+        setIsLoadingIllustrations(false);
+      }
+    };
+
+    loadRecentIllustrations();
+  }, []);
 
   const handleModelChange = (model: ModelType) => {
     setSelectedModel(model);
@@ -96,9 +126,12 @@ export default function Home() {
         id: Date.now().toString(),
         url: data.url,
         prompt,
+        model: selectedModel.replace("recraft-ai/", "").replace("-svg", ""),
+        credits: data.creditsUsed,
+        createdAt: new Date().toISOString(),
       };
 
-      setIllustrations([newIllustration, ...illustrations]);
+      setIllustrations([newIllustration, ...illustrations].slice(0, 6));
       setPrompt("");
 
       // Update credits
@@ -133,12 +166,22 @@ export default function Home() {
 
         {/* Navigation */}
         <nav className="flex-1 px-4 space-y-2">
-          <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors">
+          <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg border border-gray-300 bg-gray-50 transition-colors">
             <span className="font-medium">Creation Space</span>
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
           </button>
+
+          <a
+            href="/gallery"
+            className="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <span className="font-medium">My Gallery</span>
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </a>
 
           <button className="w-full flex items-center justify-between px-4 py-3 rounded-lg hover:bg-gray-50 transition-colors">
             <span className="font-medium">Settings</span>
@@ -251,9 +294,26 @@ export default function Home() {
 
         {/* Recent Creations */}
         <div className="w-full max-w-6xl">
-          <h3 className="text-2xl font-semibold mb-6">Recent creations</h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-semibold">Recent creations</h3>
+            {illustrations.length > 0 && (
+              <a
+                href="/gallery"
+                className="text-sm text-gray-600 hover:text-black transition-colors"
+              >
+                View all →
+              </a>
+            )}
+          </div>
 
-          {illustrations.length === 0 ? (
+          {isLoadingIllustrations ? (
+            <div className="flex items-center justify-center py-20">
+              <svg className="w-8 h-8 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            </div>
+          ) : illustrations.length === 0 ? (
             <div className="grid grid-cols-3 gap-6">
               {/* Placeholder Cards */}
               <div className="aspect-square bg-green-700 rounded-2xl overflow-hidden flex items-center justify-center">
